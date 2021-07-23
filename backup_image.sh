@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 
-. ./bash-toolbelt/toolbelt.sh
-Toolbelt_dot ./bash-tally/tally.sh ./backup_logs.log
+. ../bash-toolbelt/toolbelt.sh
+Toolbelt_dot ../bash-tally/tally.sh ./backup_logs.log
 
-Toolbelt_readConfig ../.env
+Toolbelt_readConfig ../../.env
 # remoteBackupRoot should be loaded from .env after this step
 
 if [[ -f "$FILE" ]]
