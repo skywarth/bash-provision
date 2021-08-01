@@ -1,24 +1,41 @@
 #!/usr/bin/env bash
 
 . ../bash-toolbelt/toolbelt.sh
-Toolbelt_dot ../bash-tally/tally.sh ./backup_logs.log
+Toolbelt_dot ../bash-tally/tally.sh ./backup_logs.log 'log-script-begin'
 
-Toolbelt_readConfig ../../.env
-# remoteBackupRoot should be loaded from .env after this step
+Toolbelt_readConfig ./.env
 
-if [[ -f "$FILE" ]]
+if [ $? != 0 ]
 then
-echo ERROR: .env file not found at "$(realpath ../.env)".
-Tally_error ".env file not found at $(realpath ../.env)";
-exit 1
-elif [ -z "${remoteBackupRoot+xxx}" ]
-then
-echo ERROR: remoteBackupRoot VAR is not set in .env file.
-Tally_error "remoteBackupRoot VAR is not set in .env file.";
-exit 1
+  echo "Error with Toolbelt_readConfig"
+  exit 1
 fi
 
+declare -A ELYSIUM_ENV  #this is an array
 
+Toolbelt_parseJSON ${ELYSIUM_ENV_JSON_PATH} ELYSIUM_ENV
+if [ $? != 0 ]
+then
+  echo "Error with Toolbelt_parseJSON"
+  exit 1
+fi
+
+_remoteBackupRootRealpath=$(realpath "${ELYSIUM_ENV[backupsDirs:remoteBackupRoot]}")
+if [[ ! -d "${ELYSIUM_ENV[backupsDirs:remoteBackupRoot]}" ]]
+then
+echo "ERROR:  remoteBackupRoot is not accessible, make sure it exists. Path: $_remoteBackupRootRealpath."
+Tally_error "remoteBackupRoot is not accessible, make sure it exists. Path: $_remoteBackupRootRealpath";
+exit 1
+elif [ ! -w "${ELYSIUM_ENV[backupsDirs:remoteBackupRoot]}" ]
+then
+  echo "ERROR:  remoteBackupRoot is not writable Path: $_remoteBackupRootRealpath."
+  Tally_error "remoteBackupRoot is not writable Path: $_remoteBackupRootRealpath";
+  exit 1
+else
+   Tally_info "remoteBackupRoot is OK $_remoteBackupRootRealpath";
+fi
+
+remoteBackupRoot="${ELYSIUM_ENV[backupsDirs:remoteBackupRoot]}"
 
 host=$(hostname);
 
@@ -27,6 +44,8 @@ backupName="${today}_${host}_image.img"
 
 remoteBackupHostRoot="${remoteBackupRoot}/${host}"
 remoteBackupImageFolder="${remoteBackupHostRoot}/image"
+
+
 
 if [ ! -d "${remoteBackupImageFolder}" ]
 then

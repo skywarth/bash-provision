@@ -1,49 +1,82 @@
 #!/usr/bin/env bash
 
 . ../bash-toolbelt/toolbelt.sh
-Toolbelt_dot ../bash-tally/tally.sh ./backup_logs.log
-
-Toolbelt_readConfig ../../.env
-# remoteBackupRoot should be loaded from .env after this step
-
-if [[ -f "$FILE" ]]
+Toolbelt_dot ../bash-tally/tally.sh ./backup_logs.log 'log-script-begin'
+Toolbelt_readConfig ./.env
+if [ $? != 0 ]
 then
-echo ERROR: .env file not found at "$(realpath ../.env)".
-Tally_error ".env file not found at $(realpath ../.env)";
-exit 1
-elif [ -z "${remoteBackupRoot+xxx}" ]
+  echo "Error with Toolbelt_readConfig"
+  exit 1
+fi
+
+declare -A ELYSIUM_ENV  #this is an array
+
+Toolbelt_parseJSON ${ELYSIUM_ENV_JSON_PATH} ELYSIUM_ENV
+if [ $? != 0 ]
 then
-echo ERROR: remoteBackupRoot VAR is not set in .env file.
-Tally_error "remoteBackupRoot VAR is not set in .env file.";
-exit 1
+  echo "Error with Toolbelt_parseJSON"
+  exit 1
 fi
 
 
 
+_localBackupRootRealpath=$(realpath "${ELYSIUM_ENV[backupsDirs:localBackupRoot]}")
+if [[ ! -d "${ELYSIUM_ENV[backupsDirs:localBackupRoot]}" ]]
+then
+echo "ERROR:  localBackupRoot is not accessible, make sure it exists. Path: $_localBackupRootRealpath."
+Tally_error "localBackupRoot is not accessible, make sure it exists. Path: $_localBackupRootRealpath";
+exit 1
+elif [ ! -w "${ELYSIUM_ENV[backupsDirs:localBackupRoot]}" ]
+then
+  echo "ERROR:  localBackupRoot is not writable Path: $_localBackupRootRealpath."
+  Tally_error "localBackupRoot is not writable Path: $_localBackupRootRealpath";
+  exit 1
+else
+   Tally_info "localBackupRoot is OK $_localBackupRootRealpath";
+fi
+
+_remoteBackupRootRealpath=$(realpath "${ELYSIUM_ENV[backupsDirs:remoteBackupRoot]}")
+if [[ ! -d "${ELYSIUM_ENV[backupsDirs:remoteBackupRoot]}" ]]
+then
+echo "ERROR:  remoteBackupRoot is not accessible, make sure it exists. Path: $_remoteBackupRootRealpath."
+Tally_error "remoteBackupRoot is not accessible, make sure it exists. Path: $_remoteBackupRootRealpath";
+exit 1
+elif [ ! -w "${ELYSIUM_ENV[backupsDirs:remoteBackupRoot]}" ]
+then
+  echo "ERROR:  remoteBackupRoot is not writable Path: $_remoteBackupRootRealpath."
+  Tally_error "remoteBackupRoot is not writable Path: $_remoteBackupRootRealpath";
+  exit 1
+else
+   Tally_info "remoteBackupRoot is OK $_remoteBackupRootRealpath";
+fi
 
 
 host=$(hostname);
 excludePath='./rsync-exclude.txt'
-localBackupPath='/media/local_backups'
+
 
 today=$(date +"%Y%m%d")
 backupName="${today}_${host}_rsync"
 
-backupFullPath="${localBackupPath}/${backupName}"
+localBackupRoot="${ELYSIUM_ENV[backupsDirs:localBackupRoot]}"
+localBackupFullPath="${localBackupRoot}/${backupName}"
 
+remoteBackupRoot="${ELYSIUM_ENV[backupsDirs:remoteBackupRoot]}"
 remoteBackupHostRoot="${remoteBackupRoot}/${host}"
 
-if [ -d $localBackupPath ]
+
+
+if [ -d $localBackupRoot ]
 then
 echo 'local backup path exists.'
 Tally_info 'local_backup path already exists'
 else
 Tally_info 'creating local_backup path'
-echo $localBackupPath
-mkdir -p $localBackupPath
+echo $localBackupRoot
+mkdir -p $localBackupRoot
 fi
 
-if [ -d "${backupFullPath}" ]
+if [ -d "${localBackupFullPath}" ]
 then
 echo "backup folder already exists."
 Tally_warn 'Same backup folder for today already exists.'
@@ -51,22 +84,22 @@ fi
 
 
 echo "now running rsync command"
-rsync -aH --delete --info=progress2 --info=name0 --exclude-from="${excludePath}" / "${backupFullPath}/"
+rsync -aH --delete --info=progress2 --info=name0 --exclude-from="${excludePath}" / "${localBackupFullPath}/"
 echo "completed"
 Tally_info 'RSYNC command done.'
 
 echo "now creating tar of rsync"
-tar -cf "${localBackupPath}/${backupName}.tar" -C "${backupFullPath}" .
+tar -cf "${localBackupRoot}/${backupName}.tar" -C "${localBackupFullPath}" .
 echo "tar ready"
 Tally_info 'TAR process complete'
 
 Tally_info 'Starting to copy TAR to remote'
 echo "copying rsync tar to remote"
-cp "${localBackupPath}/${backupName}.tar" "${remoteBackupHostRoot}/rsync/"
+cp "${localBackupRoot}/${backupName}.tar" "${remoteBackupHostRoot}/rsync/"
 echo "done"
 
 echo "deleting the created backup folder"
-rm -r "${backupFullPath}"
+rm -r "${localBackupFullPath}"
 echo "deleted"
 Tally_info 'Deleted the local rsync folder for today.'
 
